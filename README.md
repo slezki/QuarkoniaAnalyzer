@@ -17,5 +17,5 @@ scram b
 * Run: (use your favorite input sample)
 
 ```
-cmsRun -n 4 Onia/dimuonAnalyzer/test/run-dimuon-miniaod.py.py nEvt=1000 type=ups MCTruth=True
+cmsRun -n 4 Onia/dimuonAnalyzer/test/run-dimuon-miniaod.py nEvt=1000 type=ups MCTruth=True
 ```
