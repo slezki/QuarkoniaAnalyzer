@@ -13,25 +13,38 @@ options.parseArguments()
 inputs = []
 oniaType = options.type
 dimuSelection = ""
-pdgID = 99999999
+pdgID = 0
+pdgID_y1s = 0
+pdgID_y2s = 0
+pdgID_y3s = 0
+bIsMC = False
+bIsMC_yNs = False
 
 if oniaType == 'jpsi':
     from Onia.dimuonAnalyzer.inputFiles import jpsiMC
     inputs = jpsiMC
     dimuSelection = "2.7 < mass && mass < 3.5 && charge==0 && abs(eta) < 2.4"
     pdgID = 443
+    bIsMC = True
 if oniaType == 'psiPrime':
     from Onia.dimuonAnalyzer.inputFiles import psiPrimeMC
     inputs = psiPrimeMC
     dimuSelection = "3.5 < mass && mass < 4.0 && charge==0 && abs(eta) < 2.4"
     pdgID = 100443
+    bIsMC = True
 if oniaType == 'ups':
     from Onia.dimuonAnalyzer.inputFiles import upsMC
     inputs = upsMC
     dimuSelection = "8.5 < mass && mass < 11.5 && charge==0 && abs(eta) < 2.4"
-    pdgID = 553
+    pdgID_y1s = 553
+    pdgID_y2s = 100553
+    pdgID_y3s = 200553
+    bIsMC_yNs = True
 
-output_filename = 'rootuple_'+oniaType+'_mcRun3_miniAOD.root'
+if options.MCTruth:
+    output_filename = 'rootuple_'+oniaType+'_mcRun3_miniAOD_MCTruth.root'
+else:
+    output_filename = 'rootuple_'+oniaType+'_mcRun3_miniAOD.root'
 
 thr = options.nThr
 maxEvnt = options.nEvt
@@ -52,7 +65,7 @@ process.load("FWCore.MessageLogger.MessageLogger_cfi")
 process.MessageLogger.cerr.FwkReport.reportEvery = 100
 process.maxEvents = cms.untracked.PSet(input = cms.untracked.int32(maxEvnt))
 process.source = cms.Source("PoolSource", fileNames = cms.untracked.vstring(inputs))
-#process.source.duplicateCheckMode = cms.untracked.string('noDuplicateCheck')
+process.source.duplicateCheckMode = cms.untracked.string('noDuplicateCheck')
 process.TFileService = cms.Service("TFileService", fileName = cms.string(output_filename))
 process.options   = cms.untracked.PSet( wantSummary = cms.untracked.bool(False))
 
@@ -86,8 +99,19 @@ process.onia2MuMuCounter = cms.EDFilter('CandViewCountFilter',
     src       = cms.InputTag("onia2MuMuPAT"),
     minNumber = cms.uint32(1),
 )
-
+'''
+process.triggerSelection = cms.EDFilter("TriggerResultsFilter",
+                                        triggerConditions = cms.vstring('HLT_Dimuon0_Jpsi_v*','HLT_Dimuon0_Jpsi_L1_4R_0er1p5R_v*','HLT_Dimuon0_Jpsi_L1_8_noCorr_v*',
+                                                                         'HLT_Dimuon0_PsiPrime_L1_0er1p5_4_v*','HLT_Dimuon0_PsiPrime_L1_8_noCorr_v*',
+                                                                         'HLT_Dimuon0_Upsilon_L1_4p5er2p0M_v*','HLT_Dimuon0_Upsilon_L1_noCorr_v*',
+                                                                         'HLT_Dimuon0_PsiPrime_v*'),
+                                        hltResults = cms.InputTag( "TriggerResults", "", "HLT" ),
+                                        l1tResults = cms.InputTag( "" ),
+                                        throw = cms.bool(False)
+                                        )
+'''
 process.dimuonSequence = cms.Sequence(
+                                   #process.triggerSelection *
                                    process.oniaSelectedMuons *
                                    process.onia2MuMuPAT*
                                    process.onia2MuMuCounter
@@ -99,7 +123,11 @@ process.rootuple = cms.EDAnalyzer('Onia2MuMuRootupler',
                                 TriggerResults = cms.InputTag("TriggerResults", "", "HLT"),
                                 GenParticles = cms.InputTag("prunedGenParticles"),
                                 dimuon_pdgid = cms.uint32(pdgID),
-                                isMC = cms.bool(True),
+                                dimuon_y1S_pdgid = cms.uint32(pdgID_y1s),
+                                dimuon_y2S_pdgid = cms.uint32(pdgID_y2s),
+                                dimuon_y3S_pdgid = cms.uint32(pdgID_y3s),
+                                isMC = cms.bool(bIsMC),
+                                isMC_yNs = cms.bool(bIsMC_yNs),
                                 OnlyBest = cms.bool(False)
 )
 

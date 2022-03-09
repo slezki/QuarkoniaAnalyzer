@@ -55,8 +55,8 @@ private:
   const edm::EDGetTokenT<reco::VertexCollection>            ThePrimaryVertexLabel;
   const edm::EDGetTokenT<edm::TriggerResults>               TheTriggerResultLabel;
   const edm::EDGetTokenT<reco::GenParticleCollection>       TheGenParticleLabel;
-  const int  dimuon_pdgid_;
-  const bool isMC_,OnlyBest_;
+  const int  dimuon_pdgid_, dimuon_y1S_pdgid_, dimuon_y2S_pdgid_, dimuon_y3S_pdgid_;
+  const bool isMC_,isMC_yNs_,OnlyBest_;
 
   UInt_t run, event, nCandPerEvent, numPrimaryVertices, trigger;  
 
@@ -78,6 +78,7 @@ private:
   Double_t dimuon_vertexWeight;
 
   TLorentzVector gen_dimuon_p4;
+  TLorentzVector gen_y1s_p4, gen_y2s_p4, gen_y3s_p4;
   Int_t          gen_dimuon_pdgId, gen_dimuon_charge;
   TLorentzVector gen_muonp_p4;
   TLorentzVector gen_muonn_p4;
@@ -109,7 +110,11 @@ ThePrimaryVertexLabel(consumes<reco::VertexCollection>(iConfig.getParameter < ed
 TheTriggerResultLabel(consumes<edm::TriggerResults>(iConfig.getParameter < edm::InputTag > ("TriggerResults"))),
 TheGenParticleLabel(consumes<reco::GenParticleCollection>(iConfig.getParameter < edm::InputTag > ("GenParticles"))),
 dimuon_pdgid_(iConfig.getParameter<uint32_t>("dimuon_pdgid")),
+dimuon_y1S_pdgid_(iConfig.getParameter<uint32_t>("dimuon_y1S_pdgid")),
+dimuon_y2S_pdgid_(iConfig.getParameter<uint32_t>("dimuon_y2S_pdgid")),
+dimuon_y3S_pdgid_(iConfig.getParameter<uint32_t>("dimuon_y3S_pdgid")),
 isMC_(iConfig.getParameter<bool>("isMC")),
+isMC_yNs_(iConfig.getParameter<bool>("isMC_yNs")),
 OnlyBest_(iConfig.getParameter<bool>("OnlyBest"))
 {
 #ifdef THIS_IS_AN_EVENTSETUP_EXAMPLE
@@ -171,13 +176,17 @@ OnlyBest_(iConfig.getParameter<bool>("OnlyBest"))
   TheTree->Branch("mu2_nvph",  &mu2_nvph,  "mu2_nvph/I");
   TheTree->Branch("mu2_charge",  &mu2_charge,  "mu2_charge/I");
 
-  if(isMC_) {
+  if(isMC_ || isMC_yNs_) {
     TheTree->Branch("gen_dimuon_pdgId",      &gen_dimuon_pdgId,      "gen_dimuon_pdgId/I");
     TheTree->Branch("gen_dimuon_p4",   "TLorentzVector", &gen_dimuon_p4);
+    TheTree->Branch("gen_y1s_p4",   "TLorentzVector", &gen_y1s_p4);
+    TheTree->Branch("gen_y2s_p4",   "TLorentzVector", &gen_y2s_p4);
+    TheTree->Branch("gen_y3s_p4",   "TLorentzVector", &gen_y3s_p4);
     TheTree->Branch("gen_muonp_p4",    "TLorentzVector", &gen_muonp_p4);
     TheTree->Branch("gen_muonn_p4",    "TLorentzVector", &gen_muonn_p4);
     TheTree->Branch("gen_dimuon_charge",     &gen_dimuon_charge,       "gen_dimuon_charge/I");
   }
+
 }
 
 Onia2MuMuRootupler::~Onia2MuMuRootupler() {
@@ -208,7 +217,7 @@ void Onia2MuMuRootupler::analyze(const edm::Event& iEvent, const edm::EventSetup
   run = iEvent.id().run();
   event = iEvent.id().event();
 
-  if ( isMC_ ) {
+  if ( isMC_ || isMC_yNs_) {
     edm::Handle<reco::GenParticleCollection> GenParticles;
     iEvent.getByToken(TheGenParticleLabel, GenParticles);
     int foundit = 0;
@@ -217,9 +226,13 @@ void Onia2MuMuRootupler::analyze(const edm::Event& iEvent, const edm::EventSetup
     if (GenParticles.isValid() ) {
       for ( reco::GenParticleCollection::const_iterator itParticle = GenParticles->begin(); itParticle != GenParticles->end(); ++itParticle ) {
          int pdgId = itParticle->pdgId();
-         if ( abs(pdgId) ==  dimuon_pdgid_ ) {
+         if ((isMC_ && abs(pdgId) == dimuon_pdgid_) 
+            || (isMC_yNs_ && (abs(pdgId) == dimuon_y1S_pdgid_ || abs(pdgId) == dimuon_y2S_pdgid_ || abs(pdgId) == dimuon_y3S_pdgid_))) {
             gen_dimuon_charge = itParticle->charge();
             gen_dimuon_p4.SetPtEtaPhiM(itParticle->pt(),itParticle->eta(),itParticle->phi(),itParticle->mass());
+            if (isMC_yNs_ && abs(pdgId) == dimuon_y1S_pdgid_) gen_y1s_p4.SetPtEtaPhiM(itParticle->pt(),itParticle->eta(),itParticle->phi(),itParticle->mass());
+            if (isMC_yNs_ && abs(pdgId) == dimuon_y2S_pdgid_) gen_y2s_p4.SetPtEtaPhiM(itParticle->pt(),itParticle->eta(),itParticle->phi(),itParticle->mass());
+            if (isMC_yNs_ && abs(pdgId) == dimuon_y3S_pdgid_) gen_y3s_p4.SetPtEtaPhiM(itParticle->pt(),itParticle->eta(),itParticle->phi(),itParticle->mass());
             gen_dimuon_pdgId = pdgId;
             foundit++;
             for (uint i = 0; i < itParticle->numberOfDaughters(); ++i) {
@@ -243,29 +256,24 @@ void Onia2MuMuRootupler::analyze(const edm::Event& iEvent, const edm::EventSetup
    trigger = 0;
    if (triggerResults_handle.isValid()) {
       const edm::TriggerNames & TheTriggerNames = iEvent.triggerNames(*triggerResults_handle);
-      unsigned int NTRIGGERS = 8;
+      unsigned int NTRIGGERS = 9;
       std::string TriggersToTest[NTRIGGERS] = {
-         "HLT_Dimuon0_Jpsi_v8",
-         "HLT_Dimuon0_Jpsi_L1_4R_0er1p5R_v7",
-         "HLT_Dimuon0_Jpsi_L1_8_noCorr_v6",
-         "HLT_Dimuon0_PsiPrime_L1_0er1p5_4_v14",
-         "HLT_Dimuon0_PsiPrime_L1_8_noCorr_v6",
-         "HLT_Dimuon0_Upsilon_L1_4p5er2p0M",
-         "HLT_Dimuon0_Upsilon_L1_8_noCorr_v6",
-         "HLT_Dimuon0_PsiPrime_v0"
+         "HLT_Dimuon0_Jpsi","HLT_Dimuon0_Jpsi_L1_4R_0er1p5R","HLT_Dimuon0_Jpsi_L1_8_noCorr",
+         "HLT_Dimuon0_PsiPrime_L1_0er1p5_4","HLT_Dimuon0_PsiPrime_L1_8_noCorr",
+         "HLT_Dimuon0_Upsilon_L1_4p5er2p0M","HLT_Dimuon0_Upsilon_L1_noCorr",
+         "HLT_Dimuon0_PsiPrime","HLT_Dimuon12_upsilon_y1p4"
       };
 
       for (unsigned int i = 0; i < NTRIGGERS; i++) {
-         //for (int version = 1; version < 19; version++) {
+         for (int version = 1; version < 19; version++) {
             std::stringstream ss;
-            //ss << TriggersToTest[i] << "_v" << version;
-            ss << TriggersToTest[i];
+            ss << TriggersToTest[i] << "_v" << version;
             unsigned int bit = TheTriggerNames.triggerIndex(edm::InputTag(ss.str()).label());
             if (bit < triggerResults_handle->size() && triggerResults_handle->accept(bit) && !triggerResults_handle->error(bit)) {
                trigger += (1<<i);
                break;
             }
-         //}
+         }
       }
    } else std::cout << "*** NO triggerResults found " << iEvent.id().run() << "," << iEvent.id().event() << std::endl;
 
