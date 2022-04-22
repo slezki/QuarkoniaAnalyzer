@@ -17,5 +17,7 @@ scram b
 * Run: (use your favorite input sample)
 
 ```
-cmsRun -n 4 Onia/dimuonAnalyzer/test/run-dimuon-miniaod.py nEvt=1000 type=ups MCTruth=True
+cmsRun -n 4 Onia/dimuonAnalyzer/test/run-dimuon-miniaod.py nEvt=1000 type=ups MCTruth=False
+ - For now, 3 types of quarkonium meson has been implemented, others will be add in time.
+ - MCTruth is not functional yet, it will be rechecked and fixed later!
 ```

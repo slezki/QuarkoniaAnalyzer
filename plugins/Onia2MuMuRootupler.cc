@@ -24,6 +24,9 @@
 #include "DataFormats/VertexReco/interface/VertexFwd.h"
 #include "DataFormats/Common/interface/TriggerResults.h"
 
+#include "DataFormats/PatCandidates/interface/TriggerObjectStandAlone.h"
+#include "DataFormats/PatCandidates/interface/PackedTriggerPrescales.h"
+
 #include "TLorentzVector.h"
 #include "TTree.h"
 #include <vector>
@@ -55,10 +58,11 @@ private:
   const edm::EDGetTokenT<reco::VertexCollection>            ThePrimaryVertexLabel;
   const edm::EDGetTokenT<edm::TriggerResults>               TheTriggerResultLabel;
   const edm::EDGetTokenT<reco::GenParticleCollection>       TheGenParticleLabel;
+  const edm::EDGetTokenT<std::vector<pat::TriggerObjectStandAlone> >      TheTriggerObjectsLabel;
   const int  dimuon_pdgid_, dimuon_y1S_pdgid_, dimuon_y2S_pdgid_, dimuon_y3S_pdgid_;
-  const bool isMC_,isMC_yNs_,OnlyBest_;
+  const bool isMC_,isMC_yNs_,ups_,jpsi_,psiPrime_,OnlyBest_;
 
-  UInt_t run, event, nCandPerEvent, numPrimaryVertices, trigger;  
+  UInt_t run, event, nCandPerEvent, numPrimaryVertices, trigger, triggerL1;  
 
   TLorentzVector dimuon_p4;
   TLorentzVector muonp_p4;
@@ -109,12 +113,16 @@ TheCandidateLabel(consumes<pat::CompositeCandidateCollection>(iConfig.getParamet
 ThePrimaryVertexLabel(consumes<reco::VertexCollection>(iConfig.getParameter < edm::InputTag > ("PrimaryVertices"))),
 TheTriggerResultLabel(consumes<edm::TriggerResults>(iConfig.getParameter < edm::InputTag > ("TriggerResults"))),
 TheGenParticleLabel(consumes<reco::GenParticleCollection>(iConfig.getParameter < edm::InputTag > ("GenParticles"))),
+TheTriggerObjectsLabel(consumes<std::vector<pat::TriggerObjectStandAlone> >(iConfig.getParameter < edm::InputTag > ("triggerObjects"))),
 dimuon_pdgid_(iConfig.getParameter<uint32_t>("dimuon_pdgid")),
 dimuon_y1S_pdgid_(iConfig.getParameter<uint32_t>("dimuon_y1S_pdgid")),
 dimuon_y2S_pdgid_(iConfig.getParameter<uint32_t>("dimuon_y2S_pdgid")),
 dimuon_y3S_pdgid_(iConfig.getParameter<uint32_t>("dimuon_y3S_pdgid")),
 isMC_(iConfig.getParameter<bool>("isMC")),
 isMC_yNs_(iConfig.getParameter<bool>("isMC_yNs")),
+ups_(iConfig.getParameter<bool>("ups")),
+jpsi_(iConfig.getParameter<bool>("jpsi")),
+psiPrime_(iConfig.getParameter<bool>("psiPrime")),
 OnlyBest_(iConfig.getParameter<bool>("OnlyBest"))
 {
 #ifdef THIS_IS_AN_EVENTSETUP_EXAMPLE
@@ -130,6 +138,7 @@ OnlyBest_(iConfig.getParameter<bool>("OnlyBest"))
   TheTree->Branch("nCandPerEvent", &nCandPerEvent, "nCandPerEvent/I");
   TheTree->Branch("numPrimaryVertices", &numPrimaryVertices, "numPrimaryVertices/I");
   TheTree->Branch("trigger",            &trigger,            "trigger/I");
+  TheTree->Branch("triggerL1",            &triggerL1,            "triggerL1/I");
   TheTree->Branch("dimuon_p4",   "TLorentzVector", &dimuon_p4);
   TheTree->Branch("muonp_p4",    "TLorentzVector", &muonp_p4);
   TheTree->Branch("muonn_p4",    "TLorentzVector", &muonn_p4);
@@ -213,6 +222,9 @@ void Onia2MuMuRootupler::analyze(const edm::Event& iEvent, const edm::EventSetup
   edm::Handle < edm::TriggerResults > triggerResults_handle;
   iEvent.getByToken(TheTriggerResultLabel, triggerResults_handle);
 
+  edm::Handle <std::vector<pat::TriggerObjectStandAlone> > triggerObjects;
+  iEvent.getByToken(TheTriggerObjectsLabel, triggerObjects);
+
   numPrimaryVertices = ThePrimaryVertices->size();
   run = iEvent.id().run();
   event = iEvent.id().event();
@@ -237,11 +249,11 @@ void Onia2MuMuRootupler::analyze(const edm::Event& iEvent, const edm::EventSetup
             foundit++;
             for (uint i = 0; i < itParticle->numberOfDaughters(); ++i) {
                const reco::Candidate* p = itParticle->daughter(i);
-               if ( p->pdgId() == 13 && p->status() == 1 ) {
+               if ( p->pdgId() == -13 && p->status() == 1 ) {
                   gen_muonp_p4.SetPtEtaPhiM(p->pt(),p->eta(),p->phi(),p->mass());
                   foundit++;
                }
-               if ( p->pdgId() == -13 && p->status() == 1 ) {
+               if ( p->pdgId() == 13 && p->status() == 1 ) {
                   gen_muonn_p4.SetPtEtaPhiM(p->pt(),p->eta(),p->phi(),p->mass());
                   foundit++;
                }
@@ -253,29 +265,56 @@ void Onia2MuMuRootupler::analyze(const edm::Event& iEvent, const edm::EventSetup
     if (!gen_dimuon_pdgId) std::cout << "OniaRecoTrackRootupler: didn't find the given decay " << run << "," << event << std::endl;
   } // end if isMC
 
-   trigger = 0;
-   if (triggerResults_handle.isValid()) {
-      const edm::TriggerNames & TheTriggerNames = iEvent.triggerNames(*triggerResults_handle);
-      unsigned int NTRIGGERS = 9;
-      std::string TriggersToTest[NTRIGGERS] = {
-         "HLT_Dimuon0_Jpsi","HLT_Dimuon0_Jpsi_L1_4R_0er1p5R","HLT_Dimuon0_Jpsi_L1_8_noCorr",
-         "HLT_Dimuon0_PsiPrime_L1_0er1p5_4","HLT_Dimuon0_PsiPrime_L1_8_noCorr",
-         "HLT_Dimuon0_Upsilon_L1_4p5er2p0M","HLT_Dimuon0_Upsilon_L1_noCorr",
-         "HLT_Dimuon0_PsiPrime","HLT_Dimuon12_upsilon_y1p4"
-      };
 
-      for (unsigned int i = 0; i < NTRIGGERS; i++) {
-         for (int version = 1; version < 19; version++) {
-            std::stringstream ss;
-            ss << TriggersToTest[i] << "_v" << version;
-            unsigned int bit = TheTriggerNames.triggerIndex(edm::InputTag(ss.str()).label());
-            if (bit < triggerResults_handle->size() && triggerResults_handle->accept(bit) && !triggerResults_handle->error(bit)) {
-               trigger += (1<<i);
-               break;
-            }
-         }
+  trigger = 0;
+  if (triggerResults_handle.isValid()) {
+    const edm::TriggerNames & TheTriggerNames = iEvent.triggerNames(*triggerResults_handle);
+    unsigned int NTRIGGERS = 17;
+    std::string TriggersToTest[NTRIGGERS] = {
+       "HLT_Dimuon0_Upsilon_L1_4p5er2p0M","HLT_Dimuon12_Upsilon_y1p4",
+       "HLT_Dimuon8_Upsilon_y1p4","HLT_Dimuon9_Upsilon_y1p4",
+       "HLT_Dimuon10_Upsilon_y1p4","HLT_Dimuon11_Upsilon_y1p4",
+       "HLT_Dimuon13_Upsilon_y1p4","HLT_Dimuon14_Upsilon_y1p4",
+       "HLT_Dimuon12_Upsilon","HLT_Dimuon16_PsiPrime",
+       "HLT_Dimuon18_PsiPrime","HLT_Dimuon20_PsiPrime",
+       "HLT_Dimuon14_PsiPrime","HLT_Dimuon16_PsiPrime_noCorrL1",
+       "HLT_Dimuon14_PsiPrime_noCorrL1","HLT_Dimuon18_PsiPrime_noCorrL1",
+       "HLT_Dimuon20_PsiPrime_noCorrL1"
+    };
+
+    for (unsigned int i = 0; i < NTRIGGERS; i++) {
+       for (int version = 1; version < 19; version++) {
+          std::stringstream ss;
+          ss << TriggersToTest[i] << "_v" << version;
+          unsigned int bit = TheTriggerNames.triggerIndex(edm::InputTag(ss.str()).label());
+          if (bit < triggerResults_handle->size() && triggerResults_handle->accept(bit) && !triggerResults_handle->error(bit)) {
+            trigger += (1<<i);
+            break;
+          }
+       }
+    }
+  } else std::cout << "*** NO triggerResults found " << iEvent.id().run() << "," << iEvent.id().event() << std::endl;
+
+  triggerL1 = 0;
+  if (triggerObjects.isValid()) {
+    for (pat::TriggerObjectStandAlone obj : *triggerObjects) {
+      //obj.unpackPathNames(TheTriggerNames);
+      obj.unpackNamesAndLabels(iEvent,*triggerResults_handle);
+      for (unsigned h = 0; h < obj.filterLabels().size(); ++h) {
+        if (ups_ && obj.filterLabels()[h] == "hltL1s12DoubleMu4p5er2p0SQOSMass7to18") {
+          triggerL1 = 1;
+          //std::cout << std::endl;
+          //std::cout << "\t   Filters:    ";
+          //std::cout << " " << obj.filterLabels()[h];
+          //std::cout << "\t   Conditions:    ";
+          //std::cout << " " << obj.conditionNames()[h];
+          //std::cout << std::endl;
+        }
+        if (psiPrime_ && obj.filterLabels()[h] == "hltL1sDoubleMu4SQOSdRMax1p2DoubleMu0er1p5SQOSdRMax1p4") {triggerL1 = 1;}
+        if (jpsi_ && obj.filterLabels()[h] == "hltL1sDoubleMu4SQOSdRMax1p2DoubleMu0er1p5SQOSdRMax1p4") {triggerL1 = 1;}
       }
-   } else std::cout << "*** NO triggerResults found " << iEvent.id().run() << "," << iEvent.id().event() << std::endl;
+    }
+  } else std::cout << "*** No triggerObjects found " << iEvent.id().run() << "," << iEvent.id().event() << std::endl;
 
   if (TheCandidates.isValid() && !TheCandidates->empty()) {
     pat::CompositeCandidate TheDimuon_;
