@@ -19,6 +19,9 @@ pdgID_y2s = 0
 pdgID_y3s = 0
 bIsMC = False
 bIsMC_yNs = False
+ups_ = False
+psiPrime_ = False
+jpsi_ = False
 
 if oniaType == 'jpsi':
     from Onia.dimuonAnalyzer.inputFiles import jpsiMC
@@ -26,12 +29,14 @@ if oniaType == 'jpsi':
     dimuSelection = "2.7 < mass && mass < 3.5 && charge==0 && abs(eta) < 2.4"
     pdgID = 443
     bIsMC = True
+    jpsi_ = True
 if oniaType == 'psiPrime':
-    from Onia.dimuonAnalyzer.inputFiles import psiPrimeMC
-    inputs = psiPrimeMC
+    from Onia.dimuonAnalyzer.inputFiles import psiPrimeMC_new
+    inputs = psiPrimeMC_new
     dimuSelection = "3.5 < mass && mass < 4.0 && charge==0 && abs(eta) < 2.4"
     pdgID = 100443
     bIsMC = True
+    psiPrime_ = True
 if oniaType == 'ups':
     from Onia.dimuonAnalyzer.inputFiles import upsMC
     inputs = upsMC
@@ -40,6 +45,7 @@ if oniaType == 'ups':
     pdgID_y2s = 100553
     pdgID_y3s = 200553
     bIsMC_yNs = True
+    ups_ = True
 
 if options.MCTruth:
     output_filename = 'rootuple_'+oniaType+'_mcRun3_miniAOD_MCTruth.root'
@@ -101,10 +107,10 @@ process.onia2MuMuCounter = cms.EDFilter('CandViewCountFilter',
 )
 '''
 process.triggerSelection = cms.EDFilter("TriggerResultsFilter",
-                                        triggerConditions = cms.vstring('HLT_Dimuon0_Jpsi_v*','HLT_Dimuon0_Jpsi_L1_4R_0er1p5R_v*','HLT_Dimuon0_Jpsi_L1_8_noCorr_v*',
-                                                                         'HLT_Dimuon0_PsiPrime_L1_0er1p5_4_v*','HLT_Dimuon0_PsiPrime_L1_8_noCorr_v*',
-                                                                         'HLT_Dimuon0_Upsilon_L1_4p5er2p0M_v*','HLT_Dimuon0_Upsilon_L1_noCorr_v*',
-                                                                         'HLT_Dimuon0_PsiPrime_v*'),
+                                        triggerConditions = cms.vstring('HLT_Dimuon16_PsiPrime_v*',
+                                                                        'HLT_Dimuon18_PsiPrime_v*',
+                                                                        'HLT_Dimuon20_PsiPrime_v*',
+                                                                        'HLT_Dimuon14_PsiPrime_v*'),
                                         hltResults = cms.InputTag( "TriggerResults", "", "HLT" ),
                                         l1tResults = cms.InputTag( "" ),
                                         throw = cms.bool(False)
@@ -129,6 +135,9 @@ process.rootuple = cms.EDAnalyzer('Onia2MuMuRootupler',
                                 dimuon_y3S_pdgid = cms.uint32(pdgID_y3s),
                                 isMC = cms.bool(bIsMC),
                                 isMC_yNs = cms.bool(bIsMC_yNs),
+                                ups = cms.bool(ups_),
+                                jpsi = cms.bool(jpsi_),
+                                psiPrime = cms.bool(psiPrime_),
                                 OnlyBest = cms.bool(False)
 )
 
